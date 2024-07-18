@@ -2,13 +2,16 @@
 name = "shard1"
 idx = 0
 address = "localhost:8080"
+replica = "localhost:8083"
 
 [[shards]]
 name = "shard2"
 idx = 1
 address = "localhost:8081"
+replica = "localhost:8084"
 
 [[shards]]
 name = "shard3"
 idx = 2
 address = "localhost:8082"
+replica = "localhost:8085"

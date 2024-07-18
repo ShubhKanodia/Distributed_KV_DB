@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/shubh/distributed_kv_go/db"
@@ -14,15 +15,21 @@ type Server struct {
 	db                   *db.Database
 	shardIdx, shardCount int
 	addrs                map[int]string
+	isReplica            bool
+	primaryAddress       string
+	replicaAddress       string
 }
 
 // NewServer creates a new server with the given db and http handlers to be used to get and set the key value pair
-func NewServer(db *db.Database, shardIdx, shardCount int, addrs map[int]string) *Server {
+func NewServer(db *db.Database, shardIdx, shardCount int, addrs map[int]string, isReplica bool, primaryAddress string, replicaAddress string) *Server {
 	return &Server{
-		db:         db,
-		shardIdx:   shardIdx,
-		shardCount: shardCount,
-		addrs:      addrs,
+		db:             db,
+		shardIdx:       shardIdx,
+		shardCount:     shardCount,
+		addrs:          addrs,
+		isReplica:      isReplica,
+		primaryAddress: primaryAddress,
+		replicaAddress: replicaAddress,
 	}
 }
 func (s *Server) getShard(key string) int {
@@ -63,6 +70,10 @@ func (s *Server) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 // handling write request
 func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
+	if s.isReplica {
+		http.Error(w, "This is a read-only replica", http.StatusForbidden)
+		return
+	}
 	r.ParseForm()
 	key := r.Form.Get("key")
 	value := r.Form.Get("value")
@@ -75,4 +86,43 @@ func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := s.db.SetKey(key, []byte(value))
 	fmt.Fprintf(w, "Error = %v, shardIdx = %d, current shard = %d", err, shard, s.shardIdx)
+	go s.notifyReplica(key, value)
+}
+func (s *Server) notifyReplica(key, value string) {
+	if s.replicaAddress == "" {
+		return
+	}
+	url := fmt.Sprintf("http://%s/sync?key=%s&value=%s", s.replicaAddress, key, value)
+	_, err := http.Get(url)
+	if err != nil {
+		log.Printf("Error notifying replica: %v", err)
+	}
+}
+
+func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.isReplica {
+		http.Error(w, "This is not a replica", http.StatusForbidden)
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+	value := r.URL.Query().Get("value")
+
+	err := s.db.SetKey(key, []byte(value))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error syncing: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// to handle writing to replicas and display appropriate error log
+
+func (s *Server) ReplicaHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/set" {
+		http.Error(w, "This is a read-only replica. Set operations are not allowed.", http.StatusForbidden)
+	} else {
+		http.Error(w, "Not found", http.StatusNotFound)
+	}
 }

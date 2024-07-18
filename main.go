@@ -13,10 +13,12 @@ import (
 )
 
 var (
-	dbLocation = flag.String("db-location", "", "The path to the bolt db database")
-	httpAddr   = flag.String("http-addr", "127.0.0.1:8080", "HTTP host and port")
-	configFile = flag.String("config", "sharding.toml", "static sharding ")
-	shard      = flag.String("shard", "", "Name of the shard for the data")
+	dbLocation     = flag.String("db-location", "", "The path to the bolt db database")
+	httpAddr       = flag.String("http-addr", "127.0.0.1:8080", "HTTP host and port")
+	configFile     = flag.String("config", "sharding.toml", "static sharding ")
+	shard          = flag.String("shard", "", "Name of the shard for the data")
+	isReplica      = flag.Bool("replica", false, "Whether this instance is a read-only replica")
+	primaryAddress = flag.String("primary", "", "Address of the primary shard (required for replicas)")
 )
 
 func parseFlags() { //function to validate the flags
@@ -33,11 +35,12 @@ func parseFlags() { //function to validate the flags
 	if *shard == "" {
 		log.Fatal("shard flag is required")
 	}
+	if *isReplica && *primaryAddress == "" {
+		log.Fatal("primary flag needed for replicas")
+	}
 
 }
 func main() {
-	// Open the my.db data file in your current directory.
-	// It will be created if it doesn't exist.
 	parseFlags()
 	content, err := os.ReadFile(*configFile)
 	if err != nil {
@@ -64,6 +67,14 @@ func main() {
 		}
 	}
 
+	var replicaAddress string
+	for _, s := range c.Shards {
+		if s.Name == *shard {
+			replicaAddress = s.Replica
+			break
+		}
+	}
+
 	if shardIdx < 0 {
 		log.Fatalf("Invalid shard name %q", *shard)
 	}
@@ -76,9 +87,17 @@ func main() {
 	}
 	defer close()
 
-	srv := web.NewServer(db, shardIdx, shardCount, addrs)
-	http.HandleFunc("/get", srv.GetHandler)
-	http.HandleFunc("/set", srv.SetHandler)
+	srv := web.NewServer(db, shardIdx, shardCount, addrs, *isReplica, *primaryAddress, replicaAddress)
+
+	if *isReplica {
+		http.HandleFunc("/get", srv.GetHandler)
+		http.HandleFunc("/sync", srv.SyncHandler)
+		//for writing to replicas
+		http.HandleFunc("/", srv.ReplicaHandler)
+	} else {
+		http.HandleFunc("/get", srv.GetHandler)
+		http.HandleFunc("/set", srv.SetHandler)
+	}
 
 	// for storing data - hash(key)%count = shard index
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))

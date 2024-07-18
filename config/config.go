@@ -5,6 +5,7 @@ type Shard struct {
 	Name    string
 	Idx     int
 	Address string
+	Replica string
 }
 
 // Config describes the sharding configuration
