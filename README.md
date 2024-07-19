@@ -18,15 +18,15 @@ This is a lightweight, distributed key-value database built with Go. It features
 The distributed key-value store consists of multiple shards, each responsible for a subset of the key space. Each shard has a primary node for read and write operations, and a read-only replica for enhanced read performance.
 
 ```
-Client
-  |
-  v
-Load Balancer
- / | \
-v  v  v
-Shard1  Shard2  Shard3
-  |     |      |
-  v     v      v
+         Client
+           |
+           v
+         Server
+      /    |    \
+     v     v     v
+Shard1  Shard2    Shard3
+  |        |        |
+  v        v        v
 Replica1 Replica2 Replica3
 ```
 
@@ -128,7 +128,3 @@ idx = 2
 address = "localhost:8082"
 replica = "localhost:8085"
 ```
-
----
-
-This version should render correctly in Markdown.
