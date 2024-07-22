@@ -4,9 +4,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"os"
 
-	"github.com/BurntSushi/toml"
 	"github.com/shubh/distributed_kv_go/config"
 	"github.com/shubh/distributed_kv_go/db"
 	"github.com/shubh/distributed_kv_go/web"
@@ -39,48 +37,30 @@ func main() {
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
 	parseFlags()
-	content, err := os.ReadFile(*configFile)
+
+	c, err := config.ParseFile(*configFile)
 	if err != nil {
-		log.Fatalf("Failed to read config file: %v", err)
+		log.Fatalf("Error parsing config %q: %v", *configFile, err)
 	}
 
-	var c config.Config
-
-	if _, err := toml.Decode(string(content), &c); err != nil {
-		log.Fatalf("toml.Decode(%q): %v", *configFile, err)
-	}
-	var shardCount int
-	var shardIdx int = -1
-	var addrs = make(map[int]string)
-
-	for _, s := range c.Shards {
-		addrs[s.Idx] = s.Address
-
-		if s.Idx+1 > shardCount {
-			shardCount = s.Idx + 1
-		}
-		if s.Name == *shard {
-			shardIdx = s.Idx
-		}
+	shards, err := config.ParseShards(c.Shards, *shard)
+	if err != nil {
+		log.Fatalf("Error parsing shards config: %v", err)
 	}
 
-	if shardIdx < 0 {
-		log.Fatalf("Invalid shard name %q", *shard)
-	}
-
-	log.Printf("Shard count is %d, shard index is %d", shardCount, shardIdx)
+	log.Printf("Shard count is %d, current shard: %d", shards.Count, shards.CurrIdx)
 
 	db, close, err := db.NewDatabase(*dbLocation)
 	if err != nil {
-		log.Fatalf("NewDatabase(%q): %v", *dbLocation, err)
+		log.Fatalf("Error creating %q: %v", *dbLocation, err)
 	}
 	defer close()
 
-	srv := web.NewServer(db, shardIdx, shardCount, addrs)
+	srv := web.NewServer(db, shards)
+
 	http.HandleFunc("/get", srv.GetHandler)
 	http.HandleFunc("/set", srv.SetHandler)
 
-	// for storing data - hash(key)%count = shard index
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
 
 }
