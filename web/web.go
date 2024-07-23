@@ -59,6 +59,7 @@ func (s *Server) GetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handling write request
+
 func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	key := r.Form.Get("key")
@@ -72,4 +73,14 @@ func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := s.db.SetKey(key, []byte(value))
 	fmt.Fprintf(w, "Error = %v, shardIdx = %d, current shard = %d", err, shard, s.shards.CurrIdx)
+}
+
+// Delete extraKeys deletes keys that dont belong to the current shard
+
+func (s *Server) DeleteExtraKeysHandler(w http.ResponseWriter, r *http.Request) {
+	err := s.db.DeleteExtraKeys(func(name string) bool {
+		return s.shards.Index(name) != s.shards.CurrIdx
+	})
+
+	fmt.Fprintf(w, "Error = %v", err)
 }

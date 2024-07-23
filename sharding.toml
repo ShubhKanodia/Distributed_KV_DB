@@ -10,5 +10,10 @@ address = "localhost:8081"
 
 [[shards]]
 name = "shard3"
-idx = 2
+idx = 2   
 address = "localhost:8082"
+
+[[shards]]
+name = "shard4"
+idx = 3
+address = "localhost:8083"

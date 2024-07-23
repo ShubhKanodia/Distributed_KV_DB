@@ -73,3 +73,38 @@ func (d *Database) GetKey(key string) ([]byte, error) {
 	}
 	return nil, err
 }
+
+//Delete key after redistributing from 2 to 4 shards
+
+//this function deletes keys that doesn't belong the current shard
+
+func (d *Database) DeleteExtraKeys(isExtra func(string) bool) error {
+	var keys []string //accumulate keys to delete
+
+	err := d.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(defaultBucket)
+		b.ForEach(func(k, v []byte) error {
+			ks := string(k)
+			if isExtra(ks) {
+				keys = append(keys, string(k))
+			}
+			return nil
+
+		})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	//delete keys that don't belong to the current shard
+	return d.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(defaultBucket)
+		for _, key := range keys {
+			if err := b.Delete([]byte(key)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

@@ -1,15 +1,30 @@
 package db_test
 
 import (
-	"bytes"
 	"os"
 	"testing"
 
 	"github.com/shubh/distributed_kv_go/db"
 )
 
+func setKey(t *testing.T, d *db.Database, key, value string) {
+	t.Helper()
+	if err := d.SetKey(key, []byte(value)); err != nil {
+		t.Fatalf("Error setting key %q: %v", key, err)
+	}
+}
+
+func getKey(t *testing.T, d *db.Database, key string) string {
+	t.Helper()
+	value, err := d.GetKey(key)
+	if err != nil {
+		t.Fatalf("Error getting key %q: %v", key, err)
+	}
+	return string(value)
+}
+
 // helper function to create a temporary file with the given contents
-func TestGetSet(t *testing.T) {
+func TestDeleteExtraKeys(t *testing.T) {
 	f, err := os.CreateTemp(os.TempDir(), "kvdb")
 
 	if err != nil {
@@ -26,17 +41,25 @@ func TestGetSet(t *testing.T) {
 
 	defer closeFunc()
 
-	if err := db.SetKey("First", []byte("one")); err != nil {
-		t.Fatalf("Error setting key: %v", err)
-	}
+	setKey(t, db, "First", "one")
+	setKey(t, db, "Third", "three")
 
-	value, err := db.GetKey("First")
-	if err != nil {
-		t.Fatalf("Error getting key: %v", err)
-	}
+	value := getKey(t, db, "First")
 
-	if !bytes.Equal(value, []byte("one")) {
+	if value != "one" {
 		t.Fatalf("Expected value to be %q, but got %q", "one", value)
+	}
+	if err := db.DeleteExtraKeys(func(name string) bool { return name == "Third" }); err != nil {
+		t.Fatalf("Error deleting extra keys: %v", err)
+	}
+
+	if value = getKey(t, db, "First"); value != "one" {
+		t.Fatalf("Expected value to be %q, but got %q", "", value)
+	}
+
+	//we want to remove 3
+	if value = getKey(t, db, "Third"); value != "" {
+		t.Fatalf("Expected value to be %q, but got %q", "", value)
 	}
 
 }

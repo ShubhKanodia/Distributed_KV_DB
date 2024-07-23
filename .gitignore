@@ -1,0 +1,3 @@
+backup/
+# Ignore all .db files
+*.db
