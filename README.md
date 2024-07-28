@@ -81,7 +81,7 @@ curl "http://localhost:8080/get?key=exampleKey"
 
 
 ### Shard Redirection
-When querying any shard, the database automatically redirects the request to the appropriate shard:
+When querying any shard, the server automatically redirects the request to the appropriate shard:
 
 #### On querying shard1 at localhost:8081 for the value at shard0
 <img width="635" alt="Screenshot 2024-07-19 at 1 07 08 AM" src="https://github.com/user-attachments/assets/aa77de9c-62dd-412f-86bb-2b2a64b094ea">
